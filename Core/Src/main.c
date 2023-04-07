@@ -43,6 +43,8 @@
 CRC_HandleTypeDef hcrc;
 
 SPI_HandleTypeDef hspi1;
+DMA_HandleTypeDef hdma_spi1_rx;
+DMA_HandleTypeDef hdma_spi1_tx;
 
 TIM_HandleTypeDef htim1;
 
@@ -69,6 +71,7 @@ int nss_cond, nss_exti;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_UART4_Init(void);
 static void MX_TIM1_Init(void);
@@ -79,33 +82,59 @@ static void MX_CRC_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-	if (GPIO_Pin == NSS_TRIG_1_Pin) {
-		if (HAL_GPIO_ReadPin(NSS_TRIG_1_GPIO_Port, NSS_TRIG_1_Pin)
-				== GPIO_PIN_SET) {
 
-			HAL_SPI_TransmitReceive_IT(&hspi1, (uint8_t*) (master_transmit),
-					(uint8_t*) (master_receive), 24);
-
-		} else {
-			flag_spi_ready = 0;
-//			HAL_SPI_Abort_IT(&hspi1);
-		}
-	}
-}
+//void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+//	if (GPIO_Pin == NSS_TRIG_1_Pin) {
+//		if (HAL_GPIO_ReadPin(NSS_TRIG_1_GPIO_Port, NSS_TRIG_1_Pin)
+//				== GPIO_PIN_RESET) {
+//			nss_cond = 0;
+//
+//			HAL_SPI_TransmitReceive_IT(&hspi1, (uint8_t*) (master_transmit),
+//					(uint8_t*) (master_receive), 24);
+//
+//		}
+//		if (HAL_GPIO_ReadPin(NSS_TRIG_1_GPIO_Port, NSS_TRIG_1_Pin)
+//				== GPIO_PIN_SET) {
+//			flag_spi_ready = 0;
+////			HAL_SPI_Abort_IT(&hspi1);
+//		}
+//	}
+//}
+//void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi) {
+//
+//	if (hspi->Instance == SPI1) {
+//		if (HAL_SPI_GetError(&hspi1) != HAL_SPI_ERROR_NONE) {
+////			memset(master_receive, 0, 24);
+//			flag_spi_ready = 0;
+//		} else {
+////			memset(master_receive, 0, 24);
+//			flag_spi_ready = 0;
+//		}
+//		nss_cond = 1;
+//		HAL_GPIO_WritePin(SPI_NSS_1_GPIO_Port, SPI_NSS_1_Pin, SET);
+//	}
+//}
 void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi) {
-
 	if (hspi->Instance == SPI1) {
 		if (HAL_SPI_GetError(&hspi1) != HAL_SPI_ERROR_NONE) {
-//			memset(master_receive, 0, 24);
-			HAL_GPIO_WritePin(SPI_NSS_1_GPIO_Port, SPI_NSS_1_Pin, RESET);
+			memset(master_receive, 0, 24);
 		} else {
-//			memset(master_receive, 0, 24);
-			HAL_GPIO_WritePin(SPI_NSS_1_GPIO_Port, SPI_NSS_1_Pin, RESET);
+	//			memset(master_receive, 0, 24);
 		}
+		asm("nop");
+		nss_cond = 1;
+//		if (HAL_SPI_GetError(&hspi1) != HAL_SPI_ERROR_NONE) {
+//			memset(master_receive, 0, 24);
+//			flag_spi_ready = 0;
+//		} else {
+////			memset(master_receive, 0, 24);
+//			flag_spi_ready = 0;
+//		}
+//		nss_cond = 1;
+//		HAL_GPIO_WritePin(SPI_NSS_1_GPIO_Port, SPI_NSS_1_Pin, SET);
+
 	}
 }
-
 /* USER CODE END 0 */
 
 /**
@@ -136,13 +165,17 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_SPI1_Init();
   MX_UART4_Init();
   MX_TIM1_Init();
   MX_CRC_Init();
   /* USER CODE BEGIN 2 */
 
+	HAL_GPIO_WritePin(SPI_NSS_1_GPIO_Port, SPI_NSS_1_Pin, SET);
+	HAL_Delay(1);
 	HAL_GPIO_WritePin(SPI_NSS_1_GPIO_Port, SPI_NSS_1_Pin, RESET);
+
 	flag_spi_ready = 0;
 
 	master_transmit[0] = 0xAAAAAAAA;
@@ -151,15 +184,62 @@ int main(void)
 	master_transmit[3] = 0xDDDDDDDD;
 	master_transmit[4] = 0xEEEEEEEE;
 	master_transmit[5] = 0xFFFFFFFF;
+
+	HAL_TIM_Base_Start_IT(&htim1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1) {
-		if (flag_spi_ready == 0) {
-			HAL_GPIO_WritePin(SPI_NSS_1_GPIO_Port, SPI_NSS_1_Pin, SET);
-			flag_spi_ready = 1;
+		tim_counter = HAL_GPIO_ReadPin(SPI_NSS_1_GPIO_Port, SPI_NSS_1_Pin);
+//		tim_counter = HAL_GPIO_ReadPin(NSS_TRIG_1_GPIO_Port, NSS_TRIG_1_Pin);
+//		if (flag_spi_ready == 0) {
+//			HAL_GPIO_WritePin(SPI_NSS_1_GPIO_Port, SPI_NSS_1_Pin, RESET);
+//			flag_spi_ready = 1;
+//		}
+//		if (flag_spi_ready == 2) {
+//			HAL_GPIO_WritePin(SPI_NSS_1_GPIO_Port, SPI_NSS_1_Pin, SET);
+//		}
+
+//		if (nss_cond == 1){
+//			nss_cond = 0;
+//			HAL_GPIO_WritePin(SPI_NSS_1_GPIO_Port, SPI_NSS_1_Pin, RESET);
+//		}
+
+//		HAL_GPIO_WritePin(SPI_NSS_1_GPIO_Port, SPI_NSS_1_Pin, RESET);
+//
+//		HAL_SPI_TransmitReceive_IT(&hspi1, (uint8_t*) (master_transmit),
+//				(uint8_t*) (master_receive), 24);
+//
+//		HAL_Delay(5);
+//		HAL_GPIO_WritePin(SPI_NSS_1_GPIO_Port, SPI_NSS_1_Pin, SET);
+//
+//		HAL_Delay(5);
+		if (nss_cond == 0) {
+			HAL_GPIO_WritePin(SPI_NSS_1_GPIO_Port, SPI_NSS_1_Pin, RESET);
+			nss_cond = 2;
+
+			HAL_SPI_TransmitReceive_IT(&hspi1, (uint8_t*) (master_transmit),
+								(uint8_t*) (master_receive), 24);
 		}
+		if (nss_cond == 1){
+
+			HAL_GPIO_WritePin(SPI_NSS_1_GPIO_Port, SPI_NSS_1_Pin, SET);
+//			HAL_Delay(1);
+
+			nss_cond = 0;
+		}
+
+//		if (__HAL_SPI_GET_FLAG(&hspi1,
+//				SPI_FLAG_RXNE) && __HAL_SPI_GET_FLAG(&hspi1, SPI_FLAG_TXE)) {
+//			if (HAL_SPI_GetError(&hspi1) != HAL_SPI_ERROR_NONE) {
+//				memset(master_receive, 0, 24);
+//			} else {
+//	//			memset(master_receive, 0, 24);
+//			}
+//			asm("nop");
+//			nss_cond = 1;
+//		}
 
     /* USER CODE END WHILE */
 
@@ -354,6 +434,25 @@ static void MX_UART4_Init(void)
   /* USER CODE BEGIN UART4_Init 2 */
 
   /* USER CODE END UART4_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA2_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA2_Stream0_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
+  /* DMA2_Stream3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream3_IRQn);
 
 }
 
